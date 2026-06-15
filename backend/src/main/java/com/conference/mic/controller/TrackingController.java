@@ -1,6 +1,7 @@
 package com.conference.mic.controller;
 
 import com.conference.mic.common.Result;
+import com.conference.mic.config.NoiseThresholdConfig;
 import com.conference.mic.dto.SpeakRequestDTO;
 import com.conference.mic.entity.Microphone;
 import com.conference.mic.entity.Seat;
@@ -23,6 +24,7 @@ import java.util.Map;
 public class TrackingController {
 
     private final TrackingService trackingService;
+    private final NoiseThresholdConfig noiseThresholdConfig;
 
     @PostMapping("/speak")
     public Result<TrackingResultVO> speak(@Valid @RequestBody SpeakRequestDTO request) {
@@ -52,6 +54,38 @@ public class TrackingController {
         data.put("seats", trackingService.getAllSeats());
         data.put("microphones", trackingService.getAllMicrophones());
         data.put("tasks", trackingService.getRecentTasks(10));
+        data.put("noiseThreshold", getNoiseThresholdConfig());
         return Result.success(data);
+    }
+
+    @GetMapping("/noise-config")
+    public Result<Map<String, Object>> getNoiseThresholdConfig() {
+        Map<String, Object> config = new HashMap<>();
+        config.put("enabled", noiseThresholdConfig.isEnabled());
+        config.put("minDb", noiseThresholdConfig.getMinDb());
+        config.put("durationMs", noiseThresholdConfig.getDurationMs());
+        config.put("sampleIntervalMs", noiseThresholdConfig.getSampleIntervalMs());
+        return Result.success(config);
+    }
+
+    @PostMapping("/noise-config")
+    public Result<Map<String, Object>> updateNoiseThresholdConfig(@RequestBody Map<String, Object> params) {
+        if (params.containsKey("enabled")) {
+            noiseThresholdConfig.setEnabled((Boolean) params.get("enabled"));
+        }
+        if (params.containsKey("minDb")) {
+            noiseThresholdConfig.setMinDb(((Number) params.get("minDb")).intValue());
+        }
+        if (params.containsKey("durationMs")) {
+            noiseThresholdConfig.setDurationMs(((Number) params.get("durationMs")).intValue());
+        }
+        if (params.containsKey("sampleIntervalMs")) {
+            noiseThresholdConfig.setSampleIntervalMs(((Number) params.get("sampleIntervalMs")).intValue());
+        }
+        log.info("噪声滞后门槛配置已更新: enabled={}, minDb={}, durationMs={}",
+                noiseThresholdConfig.isEnabled(),
+                noiseThresholdConfig.getMinDb(),
+                noiseThresholdConfig.getDurationMs());
+        return getNoiseThresholdConfig();
     }
 }

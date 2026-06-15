@@ -39,6 +39,12 @@ mic:
   max-height: 400
   animation-duration: 2000
 
+noise-threshold:
+  enabled: true
+  min-db: 45
+  duration-ms: 2000
+  sample-interval-ms: 200
+
 logging:
   level:
     com.conference.mic: debug

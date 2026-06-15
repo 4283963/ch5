@@ -33,6 +33,8 @@ public class TrackingService {
     private final TrackingTaskMapper trackingTaskMapper;
     private final TrackingAlgorithmService algorithmService;
     private final MotorControlService motorControlService;
+    private final AudioSamplingService audioSamplingService;
+    private final NoiseThresholdConfig noiseThresholdConfig;
 
     private final Semaphore executionSemaphore = new Semaphore(2, true);
 
@@ -101,6 +103,32 @@ public class TrackingService {
             trackingTaskMapper.updateById(task);
 
             Thread.sleep(result.getAnimationDuration());
+
+            if (noiseThresholdConfig.isEnabled()) {
+                log.info("噪声滞后门槛已启用, 开始检测座位[{}] 语音...", task.getSeatNo());
+                boolean hasValidSpeech = audioSamplingService.checkContinuousSpeech(task.getSeatNo());
+
+                if (!hasValidSpeech) {
+                    String reason = audioSamplingService.getFilterReason(task.getSeatNo());
+                    log.warn("座位[{}] 语音检测未通过, 吊麦[{}] 保持静止, 原因: {}",
+                            task.getSeatNo(), mic.getMicCode(), reason);
+
+                    result.setFiltered(true);
+                    result.setFilterReason(reason);
+                    result.setDropDistance(BigDecimal.ZERO);
+                    result.setRotateAngle(BigDecimal.ZERO);
+
+                    task.setTaskStatus(4);
+                    task.setErrorMsg(reason);
+                    task.setFinishTime(LocalDateTime.now());
+                    trackingTaskMapper.updateById(task);
+
+                    TrackingWebSocket.broadcast(result);
+                    return;
+                }
+
+                log.info("座位[{}] 语音检测通过, 开始驱动吊麦[{}]", task.getSeatNo(), mic.getMicCode());
+            }
 
             boolean success = motorControlService.moveMicrophone(
                     mic.getDeviceAddr(),

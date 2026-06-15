@@ -30,3 +30,22 @@ export async function triggerSpeak(seatNo) {
   }
   return data.data
 }
+
+export async function fetchNoiseConfig() {
+  const res = await fetch(`${API_BASE}/tracking/noise-config`)
+  const data = await res.json()
+  return data.code === 200 ? data.data : {}
+}
+
+export async function updateNoiseConfig(config) {
+  const res = await fetch(`${API_BASE}/tracking/noise-config`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(config)
+  })
+  const data = await res.json()
+  if (data.code !== 200) {
+    throw new Error(data.message || '配置更新失败')
+  }
+  return data.data
+}

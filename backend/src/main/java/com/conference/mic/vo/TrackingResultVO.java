@@ -30,4 +30,8 @@ public class TrackingResultVO {
     private Integer animationDuration;
 
     private Long timestamp;
+
+    private Boolean filtered = false;
+
+    private String filterReason;
 }

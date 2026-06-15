@@ -4,7 +4,7 @@ const ROOM_WIDTH_CM = 1000
 const ROOM_HEIGHT_CM = 800
 const PADDING = 60
 
-function ConferenceCanvas({ seats, microphones, activeTracking }) {
+function ConferenceCanvas({ seats, microphones, activeTracking, filteredMicId }) {
   const canvasRef = useRef(null)
   const animFrameRef = useRef(null)
   const animStateRef = useRef({
@@ -105,7 +105,7 @@ function ConferenceCanvas({ seats, microphones, activeTracking }) {
     ctx.fillText(seat.seatNo, x, y)
   }, [worldToScreen])
 
-  const drawMicrophone = useCallback((ctx, canvas, mic, animState) => {
+  const drawMicrophone = useCallback((ctx, canvas, mic, animState, isFiltered) => {
     const { x, y } = worldToScreen(canvas, mic.xCoord, mic.yCoord)
     const r = 16
 
@@ -128,20 +128,51 @@ function ConferenceCanvas({ seats, microphones, activeTracking }) {
       }
     }
 
+    let glowColor1 = 'rgba(239, 68, 68, 0.5)'
+    let glowColor2 = 'rgba(239, 68, 68, 0)'
+    let micGrad1 = '#f87171'
+    let micGrad2 = '#b91c1c'
+    let strokeColor = '#fecaca'
+
+    if (isFiltered) {
+      glowColor1 = 'rgba(245, 158, 11, 0.7)'
+      glowColor2 = 'rgba(245, 158, 11, 0)'
+      micGrad1 = '#fcd34d'
+      micGrad2 = '#d97706'
+      strokeColor = '#fef3c7'
+    }
+
     const glow = ctx.createRadialGradient(currentX, currentY, 0, currentX, currentY, r * 3)
-    glow.addColorStop(0, 'rgba(239, 68, 68, 0.5)')
-    glow.addColorStop(1, 'rgba(239, 68, 68, 0)')
+    glow.addColorStop(0, glowColor1)
+    glow.addColorStop(1, glowColor2)
     ctx.fillStyle = glow
     ctx.fillRect(currentX - r * 4, currentY - r * 4, r * 8, r * 8)
+
+    if (isFiltered) {
+      const pulseR = r + 10 + Math.sin(Date.now() / 150) * 5
+      const filterGlow = ctx.createRadialGradient(currentX, currentY, 0, currentX, currentY, pulseR * 2)
+      filterGlow.addColorStop(0, 'rgba(245, 158, 11, 0.4)')
+      filterGlow.addColorStop(1, 'rgba(245, 158, 11, 0)')
+      ctx.fillStyle = filterGlow
+      ctx.fillRect(currentX - pulseR * 2, currentY - pulseR * 2, pulseR * 4, pulseR * 4)
+
+      ctx.strokeStyle = `rgba(245, 158, 11, ${0.5 + Math.sin(Date.now() / 200) * 0.3})`
+      ctx.lineWidth = 3
+      ctx.setLineDash([6, 6])
+      ctx.beginPath()
+      ctx.arc(currentX, currentY, pulseR, 0, Math.PI * 2)
+      ctx.stroke()
+      ctx.setLineDash([])
+    }
 
     ctx.beginPath()
     ctx.arc(currentX, currentY, r, 0, Math.PI * 2)
     const micGrad = ctx.createRadialGradient(currentX - 3, currentY - 3, 0, currentX, currentY, r)
-    micGrad.addColorStop(0, '#f87171')
-    micGrad.addColorStop(1, '#b91c1c')
+    micGrad.addColorStop(0, micGrad1)
+    micGrad.addColorStop(1, micGrad2)
     ctx.fillStyle = micGrad
     ctx.fill()
-    ctx.strokeStyle = '#fecaca'
+    ctx.strokeStyle = strokeColor
     ctx.lineWidth = 2
     ctx.stroke()
 
@@ -151,7 +182,14 @@ function ConferenceCanvas({ seats, microphones, activeTracking }) {
     ctx.textBaseline = 'middle'
     ctx.fillText(mic.micCode.split('-')[1], currentX, currentY)
 
-    if (animState.animating && animState.tracking && animState.tracking.micId === mic.id) {
+    if (isFiltered) {
+      ctx.fillStyle = '#fbbf24'
+      ctx.font = 'bold 10px sans-serif'
+      ctx.textAlign = 'center'
+      ctx.fillText('静止过滤', currentX, currentY + r + 14)
+    }
+
+    if (animState.animating && animState.tracking && animState.tracking.micId === mic.id && !isFiltered) {
       ctx.strokeStyle = `rgba(34, 197, 94, ${0.3 + dropProgress * 0.4})`
       ctx.lineWidth = 2
       ctx.setLineDash([5, 5])
@@ -163,7 +201,7 @@ function ConferenceCanvas({ seats, microphones, activeTracking }) {
   }, [worldToScreen])
 
   const drawTrackingBeam = useCallback((ctx, canvas, animState) => {
-    if (!animState.animating || !animState.tracking) return
+    if (!animState.animating || !animState.tracking || animState.tracking.filtered) return
 
     const t = animState.tracking
     const micScreen = worldToScreen(canvas, t.micX, t.micY)
@@ -274,13 +312,13 @@ function ConferenceCanvas({ seats, microphones, activeTracking }) {
     })
 
     microphones.forEach(mic => {
-      drawMicrophone(ctx, virtualCanvas, mic, animStateRef.current)
+      drawMicrophone(ctx, virtualCanvas, mic, animStateRef.current, mic.id === filteredMicId)
     })
 
     drawTrackingBeam(ctx, virtualCanvas, animStateRef.current)
 
     animFrameRef.current = requestAnimationFrame(draw)
-  }, [seats, microphones, drawGrid, drawStage, drawSeat, drawMicrophone, drawTrackingBeam])
+  }, [seats, microphones, filteredMicId, drawGrid, drawStage, drawSeat, drawMicrophone, drawTrackingBeam])
 
   useEffect(() => {
     if (activeTracking) {
@@ -288,7 +326,7 @@ function ConferenceCanvas({ seats, microphones, activeTracking }) {
         startTime: Date.now(),
         duration: activeTracking.animationDuration || 2000,
         tracking: activeTracking,
-        animating: true
+        animating: !activeTracking.filtered
       }
     }
   }, [activeTracking])
