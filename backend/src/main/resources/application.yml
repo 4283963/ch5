@@ -1,0 +1,44 @@
+server:
+  port: 8080
+  servlet:
+    context-path: /api
+
+spring:
+  application:
+    name: mic-tracking-system
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://localhost:3306/conference_mic?useUnicode=true&characterEncoding=utf-8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+    username: root
+    password: 123456
+
+mybatis-plus:
+  mapper-locations: classpath:mapper/*.xml
+  type-aliases-package: com.conference.mic.entity
+  configuration:
+    map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+  global-config:
+    db-config:
+      id-type: auto
+      logic-delete-field: deleted
+      logic-delete-value: 1
+      logic-not-delete-value: 0
+
+serial:
+  port: /dev/tty.usbserial-0
+  baud-rate: 9600
+  data-bits: 8
+  stop-bits: 1
+  parity: NONE
+  timeout: 2000
+
+mic:
+  default-height: 300
+  min-height: 100
+  max-height: 400
+  animation-duration: 2000
+
+logging:
+  level:
+    com.conference.mic: debug
