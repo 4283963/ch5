@@ -20,6 +20,8 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.Semaphore;
+import java.util.concurrent.TimeUnit;
 
 @Slf4j
 @Service
@@ -31,6 +33,8 @@ public class TrackingService {
     private final TrackingTaskMapper trackingTaskMapper;
     private final TrackingAlgorithmService algorithmService;
     private final MotorControlService motorControlService;
+
+    private final Semaphore executionSemaphore = new Semaphore(2, true);
 
     @Transactional(rollbackFor = Exception.class)
     public TrackingResultVO handleSpeakRequest(SpeakRequestDTO request) {
@@ -81,7 +85,17 @@ public class TrackingService {
 
     @Async
     public void executeTrackingAsync(TrackingTask task, Microphone mic, TrackingResultVO result) {
+        boolean acquired = false;
         try {
+            acquired = executionSemaphore.tryAcquire(3, TimeUnit.SECONDS);
+            if (!acquired) {
+                log.warn("追踪任务并发限制, 任务{}排队超时, 降级为仅WebSocket通知", task.getTaskNo());
+                task.setTaskStatus(3);
+                task.setErrorMsg("系统繁忙, 电机指令排队超时");
+                trackingTaskMapper.updateById(task);
+                return;
+            }
+
             task.setTaskStatus(1);
             task.setStartTime(LocalDateTime.now());
             trackingTaskMapper.updateById(task);
@@ -109,11 +123,21 @@ public class TrackingService {
                 log.error("吊麦运动执行失败: mic={}", mic.getMicCode());
             }
             trackingTaskMapper.updateById(task);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            log.error("追踪任务被中断: {}", task.getTaskNo());
+            task.setTaskStatus(3);
+            task.setErrorMsg("任务被中断");
+            trackingTaskMapper.updateById(task);
         } catch (Exception e) {
             log.error("吊麦运动执行异常: {}", e.getMessage(), e);
             task.setTaskStatus(3);
             task.setErrorMsg(e.getMessage());
             trackingTaskMapper.updateById(task);
+        } finally {
+            if (acquired) {
+                executionSemaphore.release();
+            }
         }
     }
 
